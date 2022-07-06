@@ -335,8 +335,7 @@ public final class VectorizedParquetDefinitionLevelReader extends BaseVectorized
     protected void nextVal(
         FieldVector vector, int idx, ValuesAsBytesReader valuesReader, int typeWidth, byte[] byteArray) {
       ByteBuffer buffer = valuesReader.getBuffer(typeWidth);
-      ((VarBinaryVector) vector).setSafe(idx, buffer.array(), buffer.position() + buffer.arrayOffset(),
-          buffer.limit() - buffer.position());
+      ((VarBinaryVector) vector).setSafe(idx, buffer, buffer.position(), buffer.limit() - buffer.position());
     }
 
     @Override
