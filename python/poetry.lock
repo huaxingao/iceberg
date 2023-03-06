@@ -1224,14 +1224,14 @@ files = [
 
 [[package]]
 name = "moto"
-version = "4.1.2"
+version = "4.1.4"
 description = ""
 category = "dev"
 optional = false
 python-versions = ">=3.7"
 files = [
-    {file = "moto-4.1.2-py2.py3-none-any.whl", hash = "sha256:1b361ece638c74a657325378a259276f368aafce2f8be84f8143e69fa93ce8ec"},
-    {file = "moto-4.1.2.tar.gz", hash = "sha256:63431733d2a02c7bd652ad71ec1da442a0e0d580cbac5eeb50d440a2ce066eac"},
+    {file = "moto-4.1.4-py2.py3-none-any.whl", hash = "sha256:f9bf72aec6aea49ebb1a46c8096b2c9629be58ecca3ecd8b51f781fea78148e2"},
+    {file = "moto-4.1.4.tar.gz", hash = "sha256:304cb19eee0019cd13f7d87ca590a4694677469c383ab8f8439fcb6717c47037"},
 ]
 
 [package.dependencies]
@@ -2553,4 +2553,4 @@ snappy = ["python-snappy"]
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.8"
-content-hash = "90e62ebb24ecac51f053de99f42ffe1f968fa1097bf6c475e0f189589d39870b"
+content-hash = "601d2d6cae6de0f54c3d1f3895fe0c98c718bdd731339dacda9dc664c2f83448"
