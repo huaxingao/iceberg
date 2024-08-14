@@ -39,6 +39,7 @@ import org.apache.spark.sql.vectorized.ColumnarBatch;
 
 abstract class BaseBatchReader<T extends ScanTask> extends BaseReader<ColumnarBatch, T> {
   private final int batchSize;
+  private final int pushedLimit;
 
   BaseBatchReader(
       Table table,
@@ -46,9 +47,11 @@ abstract class BaseBatchReader<T extends ScanTask> extends BaseReader<ColumnarBa
       Schema tableSchema,
       Schema expectedSchema,
       boolean caseSensitive,
-      int batchSize) {
+      int batchSize,
+      int pushedLimit) {
     super(table, taskGroup, tableSchema, expectedSchema, caseSensitive);
     this.batchSize = batchSize;
+    this.pushedLimit = pushedLimit;
   }
 
   protected CloseableIterable<ColumnarBatch> newBatchIterable(
@@ -61,7 +64,8 @@ abstract class BaseBatchReader<T extends ScanTask> extends BaseReader<ColumnarBa
       SparkDeleteFilter deleteFilter) {
     switch (format) {
       case PARQUET:
-        return newParquetIterable(inputFile, start, length, residual, idToConstant, deleteFilter);
+        return newParquetIterable(
+            inputFile, start, length, residual, idToConstant, deleteFilter, pushedLimit);
 
       case ORC:
         return newOrcIterable(inputFile, start, length, residual, idToConstant);
@@ -78,7 +82,8 @@ abstract class BaseBatchReader<T extends ScanTask> extends BaseReader<ColumnarBa
       long length,
       Expression residual,
       Map<Integer, ?> idToConstant,
-      SparkDeleteFilter deleteFilter) {
+      SparkDeleteFilter deleteFilter,
+      int limit) {
     // get required schema if there are deletes
     Schema requiredSchema = deleteFilter != null ? deleteFilter.requiredSchema() : expectedSchema();
 
@@ -97,6 +102,7 @@ abstract class BaseBatchReader<T extends ScanTask> extends BaseReader<ColumnarBa
         // read performance as every batch read doesn't have to pay the cost of allocating memory.
         .reuseContainers()
         .withNameMapping(nameMapping())
+        .pushedlimit(limit)
         .build();
   }
 
