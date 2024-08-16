@@ -87,23 +87,29 @@ abstract class BaseBatchReader<T extends ScanTask> extends BaseReader<ColumnarBa
     // get required schema if there are deletes
     Schema requiredSchema = deleteFilter != null ? deleteFilter.requiredSchema() : expectedSchema();
 
-    return Parquet.read(inputFile)
-        .project(requiredSchema)
-        .split(start, length)
-        .createBatchedReaderFunc(
-            fileSchema ->
-                VectorizedSparkParquetReaders.buildReader(
-                    requiredSchema, fileSchema, idToConstant, deleteFilter))
-        .recordsPerBatch(batchSize)
-        .filter(residual)
-        .caseSensitive(caseSensitive())
-        // Spark eagerly consumes the batches. So the underlying memory allocated could be reused
-        // without worrying about subsequent reads clobbering over each other. This improves
-        // read performance as every batch read doesn't have to pay the cost of allocating memory.
-        .reuseContainers()
-        .withNameMapping(nameMapping())
-        .pushedlimit(limit)
-        .build();
+    Parquet.ReadBuilder readerBuilder =
+        Parquet.read(inputFile)
+            .project(requiredSchema)
+            .split(start, length)
+            .createBatchedReaderFunc(
+                fileSchema ->
+                    VectorizedSparkParquetReaders.buildReader(
+                        requiredSchema, fileSchema, idToConstant, deleteFilter))
+            .recordsPerBatch(batchSize)
+            .filter(residual)
+            .caseSensitive(caseSensitive())
+            // Spark eagerly consumes the batches. So the underlying memory allocated could be
+            // reused
+            // without worrying about subsequent reads clobbering over each other. This improves
+            // read performance as every batch read doesn't have to pay the cost of allocating
+            // memory.
+            .reuseContainers()
+            .withNameMapping(nameMapping());
+    if (limit > 0) {
+      readerBuilder = readerBuilder.pushedlimit(limit);
+    }
+
+    return readerBuilder.build();
   }
 
   private CloseableIterable<ColumnarBatch> newOrcIterable(
