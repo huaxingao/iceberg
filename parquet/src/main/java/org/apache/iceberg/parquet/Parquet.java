@@ -1153,6 +1153,10 @@ public class Parquet {
     }
 
     public ReadBuilder pushedlimit(int limit) {
+      if (limit <= 0) {
+        throw new IllegalArgumentException("Pushed limit must be > 0");
+      }
+
       this.pushedLimit = limit;
       return this;
     }
