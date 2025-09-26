@@ -35,7 +35,11 @@ import org.junit.platform.suite.api.SuiteDisplayName;
  */
 @Suite
 @SuiteDisplayName("Iceberg REST Compatibility Kit")
-@SelectClasses({RESTCompatibilityKitCatalogTests.class, RESTCompatibilityKitViewCatalogTests.class})
+@SelectClasses({
+  RESTCompatibilityKitCatalogTests.class,
+  RESTCompatibilityKitViewCatalogTests.class,
+  RESTCompatibilityKitIdempotencyTests.class
+})
 public class RESTCompatibilityKitSuite {
   static final String RCK_REQUIRES_NAMESPACE_CREATE = "rck.requires-namespace-create";
   static final String RCK_SUPPORTS_SERVERSIDE_RETRY = "rck.supports-serverside-retry";

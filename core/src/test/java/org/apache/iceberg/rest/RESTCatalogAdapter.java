@@ -40,6 +40,7 @@ import org.apache.iceberg.exceptions.AlreadyExistsException;
 import org.apache.iceberg.exceptions.CommitFailedException;
 import org.apache.iceberg.exceptions.CommitStateUnknownException;
 import org.apache.iceberg.exceptions.ForbiddenException;
+import org.apache.iceberg.exceptions.IdempotencyKeyConflictException;
 import org.apache.iceberg.exceptions.NamespaceNotEmptyException;
 import org.apache.iceberg.exceptions.NoSuchIcebergTableException;
 import org.apache.iceberg.exceptions.NoSuchNamespaceException;
@@ -87,6 +88,7 @@ public class RESTCatalogAdapter extends BaseHTTPClient {
           .put(NamespaceNotEmptyException.class, 409)
           .put(NotAuthorizedException.class, 401)
           .put(ForbiddenException.class, 403)
+          .put(IdempotencyKeyConflictException.class, 409)
           .put(NoSuchNamespaceException.class, 404)
           .put(NoSuchTableException.class, 404)
           .put(NoSuchViewException.class, 404)
@@ -624,6 +626,11 @@ public class RESTCatalogAdapter extends BaseHTTPClient {
         ImmutableMap.Builder<String, String> vars = ImmutableMap.builder();
         vars.putAll(request.queryParameters());
         vars.putAll(routeAndVars.second());
+        // Expose headers to the handler to enable testing features (e.g., Idempotency-Key)
+        request
+            .headers()
+            .entries()
+            .forEach(entry -> vars.put(entry.name(), entry.value()));
 
         return handleRequest(routeAndVars.first(), vars.build(), request.body(), responseType);
 

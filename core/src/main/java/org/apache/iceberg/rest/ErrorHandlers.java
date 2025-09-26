@@ -24,6 +24,7 @@ import org.apache.iceberg.exceptions.BadRequestException;
 import org.apache.iceberg.exceptions.CommitFailedException;
 import org.apache.iceberg.exceptions.CommitStateUnknownException;
 import org.apache.iceberg.exceptions.ForbiddenException;
+import org.apache.iceberg.exceptions.IdempotencyKeyConflictException;
 import org.apache.iceberg.exceptions.NamespaceNotEmptyException;
 import org.apache.iceberg.exceptions.NoSuchNamespaceException;
 import org.apache.iceberg.exceptions.NoSuchTableException;
@@ -236,6 +237,12 @@ public class ErrorHandlers {
           throw new ForbiddenException("Forbidden: %s", error.message());
         case 405:
         case 406:
+          break;
+        case 409:
+          if ("IdempotencyKeyConflictException".equals(error.type())) {
+            throw new IdempotencyKeyConflictException(
+                "Idempotency key conflict: %s", error.message());
+          }
           break;
         case 500:
           throw new ServiceFailureException("Server error: %s: %s", error.type(), error.message());

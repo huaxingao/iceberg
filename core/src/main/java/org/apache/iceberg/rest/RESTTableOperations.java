@@ -155,13 +155,28 @@ class RESTTableOperations implements TableOperations {
     // the error handler will throw necessary exceptions like CommitFailedException and
     // UnknownCommitStateException
     // TODO: ensure that the HTTP client lib passes HTTP client errors to the error handler
-    LoadTableResponse response =
-        client.post(path, request, LoadTableResponse.class, headers, errorHandler);
+    LoadTableResponse response;
+    try {
+      response = client.post(path, request, LoadTableResponse.class, headers, errorHandler);
 
-    // all future commits should be simple commits
-    this.updateType = UpdateType.SIMPLE;
+      // all future commits should be simple commits
+      this.updateType = UpdateType.SIMPLE;
 
-    updateCurrentMetadata(response);
+      updateCurrentMetadata(response);
+
+    } catch (org.apache.iceberg.exceptions.CommitStateUnknownException e) {
+      // Optional client-side deconfliction fallback (when idempotency is unsupported):
+      // If commit state is unknown, try to verify whether the intended snapshot is now the
+      // current snapshot on the server. If so, treat the commit as succeeded.
+      if (wasIntendedUpdateApplied(metadata)) {
+        // all future commits should be simple commits
+        this.updateType = UpdateType.SIMPLE;
+        return; // metadata has been refreshed inside wasIntendedUpdateApplied
+      }
+
+      // Otherwise rethrow the original exception
+      throw e;
+    }
   }
 
   @Override
@@ -179,6 +194,35 @@ class RESTTableOperations implements TableOperations {
     }
 
     return current;
+  }
+
+  /**
+   * Best-effort verification that the intended update was applied when commit state is unknown.
+   *
+   * <p>This compares the current snapshot ID returned by a fresh refresh with the snapshot ID in
+   * the intended metadata. If they match, we assume the previous attempt succeeded and leave
+   * {@link #current} updated by {@link #refresh()}.
+   */
+  protected boolean wasIntendedUpdateApplied(TableMetadata intendedMetadata) {
+    try {
+      TableMetadata after = refresh();
+
+      Long intendedSnapshotId =
+          intendedMetadata != null && intendedMetadata.currentSnapshot() != null
+              ? intendedMetadata.currentSnapshot().snapshotId()
+              : null;
+
+      Long actualSnapshotId =
+          after != null && after.currentSnapshot() != null
+              ? after.currentSnapshot().snapshotId()
+              : null;
+
+      return intendedSnapshotId != null && intendedSnapshotId.equals(actualSnapshotId);
+
+    } catch (RuntimeException refreshFailure) {
+      // If refresh itself fails, treat as unknown and let caller retry/propagate
+      return false;
+    }
   }
 
   private static String metadataFileLocation(TableMetadata metadata, String filename) {
