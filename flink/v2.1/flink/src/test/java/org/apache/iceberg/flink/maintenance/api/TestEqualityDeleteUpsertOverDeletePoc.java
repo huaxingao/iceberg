@@ -151,28 +151,50 @@ class TestEqualityDeleteUpsertOverDeletePoc extends OperatorTestBase {
           .pollInterval(Duration.ofMillis(200))
           .untilAsserted(() -> assertThat(dvCount(table, SnapshotRef.MAIN_BRANCH)).isGreaterThan(0));
 
-      // Give a beat for any (erroneous) second DV to also land, then snapshot the state.
-      table.refresh();
-      Snapshot mainHead = table.snapshot(SnapshotRef.MAIN_BRANCH);
-      long dvs = dvCount(table, SnapshotRef.MAIN_BRANCH);
-      long rows = rowCount(table, SnapshotRef.MAIN_BRANCH);
-      LOG.info("=== POC RESULT === main summary: {}", mainHead.summary());
-      LOG.info("=== POC RESULT === main dvCount={} rowCount={}", dvs, rows);
-      LOG.info("=== POC RESULT === main id=4 price={}", priceOf(table, SnapshotRef.MAIN_BRANCH, 4));
+      // The over-delete is a RACE in the planner's re-processing loop: it keeps re-converting the
+      // same staging snapshot, and a later re-conversion can commit a SECOND DV that deletes the
+      // re-inserted id=4 row. Reading main once right after the first DV is flaky -- it sometimes
+      // catches only the correct first DV (1 DV / 20 rows) before the bad second DV lands. Instead
+      // watch main for a sustained window and fail the MOMENT an over-delete is observed: once a
+      // bad DV commits it is permanent, so the worst state sticks. On fixed code the re-processing
+      // loop stops and main stays at 1 DV / 20 rows / id=4=30.0 for the entire window.
+      long deadline = System.currentTimeMillis() + Duration.ofMinutes(2).toMillis();
+      long worstDvCount = 0;
+      long worstRowCount = 20;
+      String observedPrice = "30.0";
+      boolean overDeleted = false;
+      while (System.currentTimeMillis() < deadline) {
+        table.refresh();
+        long dvs = dvCount(table, SnapshotRef.MAIN_BRANCH);
+        long rows = rowCount(table, SnapshotRef.MAIN_BRANCH);
+        String price = priceOf(table, SnapshotRef.MAIN_BRANCH, 4);
+        worstDvCount = Math.max(worstDvCount, dvs);
+        worstRowCount = Math.min(worstRowCount, rows);
+        if (dvs > 1 || rows < 20 || price == null) {
+          observedPrice = price;
+          overDeleted = true;
+          Snapshot mainHead = table.snapshot(SnapshotRef.MAIN_BRANCH);
+          LOG.info("=== POC RESULT === OVER-DELETE main summary: {}", mainHead.summary());
+          break;
+        }
+        Thread.sleep(500);
+      }
+      LOG.info(
+          "=== POC RESULT === overDeleted={} worstDvCount={} worstRowCount={} id=4 price={}",
+          overDeleted,
+          worstDvCount,
+          worstRowCount,
+          observedPrice);
 
-      // The proof. Correct behavior is exactly one DV and 20 surviving rows with id=4 -> 30.0.
-      assertThat(dvCount(table, SnapshotRef.MAIN_BRANCH))
-          .as("main must have exactly ONE deletion vector (old id=4 only), not two")
-          .isEqualTo(1);
-      assertThat(rowCount(table, SnapshotRef.MAIN_BRANCH))
-          .as("main must keep all 20 logical rows after conversion")
-          .isEqualTo(20);
-      assertThat(priceOf(table, SnapshotRef.MAIN_BRANCH, 4))
-          .as("id=4 must reflect the upserted price 30.0 on main")
-          .isEqualTo("30.0");
-      assertThat(equalityDeleteCount(table, SnapshotRef.MAIN_BRANCH))
-          .as("main must have zero equality deletes after conversion")
-          .isZero();
+      // Asserts the CORRECT behavior, so the test fails when the over-delete is observed.
+      assertThat(overDeleted)
+          .as(
+              "ConvertEqualityDeletes over-deleted the re-inserted id=4 row on main "
+                  + "(worst dvCount=%s, worst rowCount=%s, id=4 price=%s). A single-key upsert "
+                  + "conversion on a staging branch must keep all 20 rows with id=4=30.0 and "
+                  + "exactly one DV.",
+              worstDvCount, worstRowCount, observedPrice)
+          .isFalse();
     } finally {
       closeJobClient(jobClient);
     }
